@@ -1,0 +1,42 @@
+<launch>
+    <include file="$(find abh3)/launch/teleop.launch"/>
+    <machine name="raspberry" address="192.168.250.12" env-loader="~/.ros/rosnet.sh" user="pi" password="raspberry"/>
+    <node name="abh3_com" pkg="abh3" type="abh3_com.py" machine="raspberry" output="screen"
+        args="/abh3/main/vcmd:=/abh3/main/vout/xa_ab">
+        <rosparam>
+            driver:
+                item: abh3
+                name: main
+            serial:
+                port_name: /dev/abh3
+                baud_rate: 115200
+            diag:
+                rate: 50
+                flag: 0xffff
+        </rosparam>
+    </node>
+    <node name="abh3_conv" pkg="abh3" type="abh3_conv.py"
+        args="/abh3/main/vin/xa:=/cmd_vel /abh3/main/vin/ab:=/abh3/main/vfbk">
+        <rosparam>
+            driver:
+                item: abh3
+                name: main
+            machine:
+                rateNUM: 1.0
+                rateDen: 15.2
+                wheel: 0.11
+                width: 0.35
+        </rosparam>
+    </node>
+    <node name="abh3_trans" pkg="abh3" type="abh3_trans.py">
+        <rosparam>
+            driver:
+                item: abh3
+                name: main
+            serial:
+                port_name: /dev/abh3trans
+                baud_rate: 115200
+        </rosparam>
+    </node>
+</launch>
+

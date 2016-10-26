@@ -1,0 +1,26 @@
+<launch>
+    <node name="abh3_com" pkg="abh3" type="abh3_com.py" output="screen">
+        <rosparam>
+            driver:
+                item: abh3
+                name: main
+            serial:
+                port_name: /dev/abh3
+                baud_rate: 115200
+            diag:
+                rate: 50
+                flag: 0xffff
+        </rosparam>
+    </node>
+    <node name="abh3_trans" pkg="abh3" type="abh3_trans.py">
+        <rosparam>
+            driver:
+                item: abh3
+                name: main
+            serial:
+                port_name: /dev/abh3trans
+                baud_rate: 115200
+        </rosparam>
+    </node>
+</launch>
+
