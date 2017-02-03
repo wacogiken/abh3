@@ -20,6 +20,8 @@ class abh3JoyTwist:
         self.service("START ON ON")
         self.service("SELECT 0 0")
         self.service("SELVEL 0 0")
+        self.service("TBL 0 CS A INT")
+        self.service("TBL 0 CS B INT")
 
         self.sub = rospy.Subscriber('joy', Joy, self.joy_handler, queue_size=1)
         self.pub = rospy.Publisher('cmd_vel', Twist, queue_size=1)

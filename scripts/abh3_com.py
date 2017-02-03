@@ -33,7 +33,7 @@ diag_flag  = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 diag_value = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 diag_num = 16
 
-cmd_dict = {'TBL':'CP', 'SERVO':'CP', 'START':'CP', 'SELECT':'CP', 'SELVEL':''}
+cmd_dict = {'TBL':'CP', 'SERVO':'CP', 'START':'CP', 'SELECT':'CP', 'SELVEL':'', 'ID':'BI', 'DOUT':'CP', 'DIN':'CM'}
 cmd_adrs_dict = {'SERVO' :[0x5100, 0x5120],
                  'START' :[0x5101, 0x5121],
                  'SELECT':[0x5107, 0x5127]}
@@ -48,6 +48,16 @@ tbl_dict   = {'CS':[0x50e0, 0x10, 0],
               'KI':[0x5070, 0x60, 1]}
 tbl_axis_dict = {'A':0, 'B':1, 'Y':0, 'X':1}
 num_dict = {'INT':0, 'EXT':1, 'OFF':0x0000, 'ON':0x8000}
+
+id_num = 6
+id_tbl = [0, 2, 4, 5, 8, 0xc]
+
+out_num = 8
+out_dict = {'OPEN':0, 'CLOSE':(1<<32)-1}
+out_bit = [24, 25, 26, 27, 28, 29, 30, 31]
+
+in_num = 20
+in_bit = [0, 1, 2, 3, 24, 25, 26, 27, 28, 29, 30, 31, 16, 17, 18, 19, 20, 21, 22, 23]
 
 class abh3Manager:
     def __init__(self):
@@ -162,7 +172,7 @@ class abh3Manager:
         self.semaphore.acquire()
         flag, s = self.trans(command=s, flag=True)
         self.semaphore.release()
-        return s
+        return [flag, s]
 
     def abh3Com_handler(self, req):
         sp = req.command.split(' ')
@@ -184,12 +194,15 @@ class abh3Manager:
                     else:
                         return abh3ComResponse(response='invalid TBL Axis')
                     if len(sp) == 4: # read
-                        s = self.sender(cmd=code, adrs=num, val=0, wflag=False)
-                        val = int('0x'+s[len(s)-8:], 16)
-                        if tbl[2] == 1:
-                            s = pkflt.pkflt_to_str(val)
+                        flag, s = self.sender(cmd=code, adrs=num, val=0, wflag=False)
+                        if flag == True:
+                            val = int('0x'+s[len(s)-8:], 16)
+                            if tbl[2] == 1:
+                                s = pkflt.pkflt_to_str(val)
+                            else:
+                                s = str(val)
                         else:
-                            s = str(val)
+                            s = ''
                         return abh3ComResponse(response=s)
                     else: # write
                         if sp[4] in num_dict:
@@ -199,7 +212,9 @@ class abh3Manager:
                                 val = pkflt.str_to_pkflt(sp[4])
                             else:
                                 val = int(sp[4])
-                        s = self.sender(cmd=code, adrs=num, val=val, wflag=True)
+                        flag, s = self.sender(cmd=code, adrs=num, val=val, wflag=True)
+                        if flag == False:
+                            s = ''
                         return abh3ComResponse(response=s)
                 elif cmd == 'SERVO' or cmd == 'START':
                     adrs = cmd_adrs_dict[cmd]
@@ -207,13 +222,15 @@ class abh3Manager:
                         val = num_dict[sp[1]]
                     else:
                         val = int(sp[1])
-                    s = self.sender(cmd=code, adrs=adrs[0], val=val, wflag=True)
-                    if s == '':
+                    flag, s = self.sender(cmd=code, adrs=adrs[0], val=val, wflag=True)
+                    if flag == True and s == '':
                         if sp[2] in num_dict:
                             val = num_dict[sp[2]]
                         else:
                             val = int(sp[2])
-                        s = self.sender(cmd=code, adrs=adrs[1], val=val, wflag=True)
+                        flag, s = self.sender(cmd=code, adrs=adrs[1], val=val, wflag=True)
+                    else:
+                        s = ''
                     return abh3ComResponse(response=s)
                 elif cmd == 'SELECT':
                     adrs = cmd_adrs_dict[cmd]
@@ -223,16 +240,18 @@ class abh3Manager:
                             val = num_dict['OFF']
                         else:
                             val = num_dict['ON']
-                        s = self.sender(cmd=code, adrs=adrs[0]+i, val=val, wflag=True)
-                        if s != '':
+                        flag, s = self.sender(cmd=code, adrs=adrs[0]+i, val=val, wflag=True)
+                        if flag != True or s != '':
+                            s = ''
                             break;
                         # B
                         if int(sp[2]) & 2**i:
                             val = num_dict['OFF']
                         else:
                             val = num_dict['ON']
-                        s = self.sender(cmd=code, adrs=adrs[1]+i, val=val, wflag=True)
-                        if s != '':
+                        flag, s = self.sender(cmd=code, adrs=adrs[1]+i, val=val, wflag=True)
+                        if flag != True or s != '':
+                            s = ''
                             break;
                     return abh3ComResponse(response=s)
                 elif cmd == 'SELVEL':
@@ -241,6 +260,62 @@ class abh3Manager:
                         if num>=0 and num<8:
                             vel_sel[i] = num
                     return abh3ComResponse(response='')
+                elif cmd == 'ID':
+                    num = int(sp[1])
+                    if num>=0 and num<id_num:
+                        flag, s = self.sender(cmd=code, adrs=id_tbl[num], val=0, wflag=False)
+                        if num == 1:
+                            ver = s.split('.')
+                            s = ver[0]+'.'+ver[1]+'.'+ver[2]
+                        return abh3ComResponse(response=s)
+                    elif num == -1:
+                        flag, s = self.sender(cmd=code, adrs=id_tbl[1], val=0, wflag=False)
+                        return abh3ComResponse(response=s)
+                    else:
+                        return abh3ComResponse(response='invalid Number')
+                elif cmd == 'DOUT':
+                    num = int(sp[1])
+                    if num>=out_num or num<0:
+                        return abh3ComResponse(response='invalid OUT Number')
+                    if len(sp) == 2: # read
+                        flag, s = self.sender(cmd='CM', adrs=0x0004, val=0, wflag=False)
+                        if flag == True:
+                            val = int('0x'+s[len(s)-8:], 16)
+                            if val & (1<<out_bit[num]):
+                                s = 'CLOSE'
+                            else:
+                                s = 'OPEN'
+                        else:
+                            s = ''
+                        return abh3ComResponse(response=s)
+                    elif len(sp) == 3: # write
+                        if sp[2] in out_dict:
+                            val = out_dict[sp[2]]
+                        else:
+                            return abh3ComResponse(response='invalid OUT Value')
+                        flag, s = self.sender(cmd=code, adrs=0x5180+num, val=val, wflag=True)
+                        if flag == False:
+                            s = ''
+                        return abh3ComResponse(response=s)
+                    else:
+                        return abh3ComResponse(response='invalid Command')
+                elif cmd == 'DIN':
+                    num = int(sp[1])
+                    if num>=in_num or num<0:
+                        return abh3ComResponse(response='invalid IN Number')
+                    if len(sp) == 2: # read
+                        flag, s = self.sender(cmd=code, adrs=0x0002, val=0, wflag=False)
+                        if flag == True:
+                            val = int('0x'+s[len(s)-8:], 16)
+                            if val & (1<<in_bit[num]):
+                                s = 'CLOSE'
+                            else:
+                                s = 'OPEN'
+                        else:
+                            s = ''
+                        return abh3ComResponse(response=s)
+                    else:
+                        return abh3ComResponse(response='invalid Command')
                 else:
                     return abh3ComResponse(response='invalid Command')
             else:
@@ -255,13 +330,14 @@ class abh3Manager:
     def abh3Vel_handler(self, msg):
         vel_val = msg.velAY, msg.velBX
         for i in range(vel_num):
-            s = self.sender(cmd=vel_cmd[i], adrs=vel_adrs[i]+vel_sel[i], val=pkflt.flt_to_pkflt(vel_val[i]), wflag=True)
+            flag, s = self.sender(cmd=vel_cmd[i], adrs=vel_adrs[i]+vel_sel[i], val=pkflt.flt_to_pkflt(vel_val[i]), wflag=True)
 
         abh3 = abh3Vel()
         for i in range(drv_num):
-            s = self.sender(cmd=drv_cmd[i], adrs=drv_adrs[i], val=0, wflag=False)
-            val = int('0x'+s[len(s)-8:], 16)
-            drv_val[i] = pkflt.pkflt_to_flt(val)
+            flag, s = self.sender(cmd=drv_cmd[i], adrs=drv_adrs[i], val=0, wflag=False)
+            if flag == True:
+                val = int('0x'+s[len(s)-8:], 16)
+                drv_val[i] = pkflt.pkflt_to_flt(val)
 
         abh3.velAY, abh3.velBX = drv_val
         self.pub.publish(abh3)
